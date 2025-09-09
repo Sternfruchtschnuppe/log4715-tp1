@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 
 #pragma warning disable 649
@@ -6,6 +8,12 @@ namespace UnityStandardAssets._2D
 {
     public class PlatformerCharacter2D : MonoBehaviour
     {
+        [SerializeField] private int m_BonusJumps = 2;
+        private int currentJumps = 0;
+        private bool m_IsOnWall = false;
+        [SerializeField] private Transform m_WallCheck;  
+        [SerializeField] private float m_WallCheckRadius = 0.2f;
+        
         [SerializeField] private float m_MaxSpeed = 10f;                    // The fastest the player can travel in the x axis.
         [SerializeField] private float m_JumpForce = 400f;                  // Amount of force added when the player jumps.
         [Range(0, 1)] [SerializeField] private float m_CrouchSpeed = .36f;  // Amount of maxSpeed applied to crouching movement. 1 = 100%
@@ -40,9 +48,23 @@ namespace UnityStandardAssets._2D
             Collider2D[] colliders = Physics2D.OverlapCircleAll(m_GroundCheck.position, k_GroundedRadius, m_WhatIsGround);
             for (int i = 0; i < colliders.Length; i++)
             {
-                if (colliders[i].gameObject != gameObject)
+                if (colliders[i].gameObject != gameObject && !m_Grounded) 
+                {
                     m_Grounded = true;
+                    currentJumps = 0;
+                }
             }
+            
+            m_IsOnWall = false;
+            colliders = Physics2D.OverlapCircleAll(m_WallCheck.position, m_WallCheckRadius, m_WhatIsGround);
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                if (colliders[i].gameObject != gameObject) 
+                {
+                    m_IsOnWall = true;
+                }
+            }
+            
             m_Anim.SetBool("Ground", m_Grounded);
 
             // Set the vertical animation
@@ -74,8 +96,12 @@ namespace UnityStandardAssets._2D
                 // The Speed animator parameter is set to the absolute value of the horizontal input.
                 m_Anim.SetFloat("Speed", Mathf.Abs(move));
 
-                // Move the character
+                // if (m_Grounded)// || Mathf.Abs(move) > 0.5f)
+                // {
+                // }
                 m_Rigidbody2D.linearVelocity = new Vector2(move*m_MaxSpeed, m_Rigidbody2D.linearVelocity.y);
+                
+                // Move the character
 
                 // If the input is moving the player right and the player is facing left...
                 if (move > 0 && !m_FacingRight)
@@ -90,8 +116,23 @@ namespace UnityStandardAssets._2D
                     Flip();
                 }
             }
+            
+            if (jump && m_IsOnWall && !m_Grounded)
+            {
+                m_Rigidbody2D.linearVelocity = new Vector2(0, m_Rigidbody2D.linearVelocity.y);
+                m_Rigidbody2D.AddForce(new Vector2(0.5f * (m_FacingRight ? -m_JumpForce : m_JumpForce), m_JumpForce));
+                Flip();
+                StartCoroutine(DisableBool());
+            }
+            else if (jump && !m_Grounded && currentJumps < m_BonusJumps && !m_IsOnWall)
+            {
+                m_Rigidbody2D.AddForce(new Vector2(0f, m_JumpForce));
+                ++currentJumps;
+            }
+            
+            
             // If the player should jump...
-            if (m_Grounded && jump && m_Anim.GetBool("Ground"))
+            if (jump && m_Grounded && m_Anim.GetBool("Ground"))
             {
                 // Add a vertical force to the player.
                 m_Grounded = false;
@@ -99,7 +140,12 @@ namespace UnityStandardAssets._2D
                 m_Rigidbody2D.AddForce(new Vector2(0f, m_JumpForce));
             }
         }
-
+        
+        IEnumerator DisableBool() {
+            m_AirControl = false;
+            yield return new WaitForSeconds(0.4f);
+            m_AirControl = true;
+        }
 
         private void Flip()
         {
