@@ -13,6 +13,9 @@ namespace UnityStandardAssets._2D
         private bool m_IsOnWall = false;
         [SerializeField] private Transform m_WallCheck;  
         [SerializeField] private float m_WallCheckRadius = 0.2f;
+        [SerializeField] private float m_MaxJumpForce = 800f;
+        private float m_CurrentCharge = 0f;
+        private float m_ChargeSpeed = 1f;
         
         [SerializeField] private float m_MaxSpeed = 10f;                    // The fastest the player can travel in the x axis.
         [SerializeField] private float m_JumpForce = 400f;                  // Amount of force added when the player jumps.
@@ -22,7 +25,8 @@ namespace UnityStandardAssets._2D
 
         private Transform m_GroundCheck;    // A position marking where to check if the player is grounded.
         const float k_GroundedRadius = .2f; // Radius of the overlap circle to determine if grounded
-        private bool m_Grounded;            // Whether or not the player is grounded.
+        public bool m_Grounded { get; private set; }
+
         private Transform m_CeilingCheck;   // A position marking where to check for ceilings
         const float k_CeilingRadius = .01f; // Radius of the overlap circle to determine if the player can stand up
         private Animator m_Anim;            // Reference to the player's animator component.
@@ -95,10 +99,7 @@ namespace UnityStandardAssets._2D
 
                 // The Speed animator parameter is set to the absolute value of the horizontal input.
                 m_Anim.SetFloat("Speed", Mathf.Abs(move));
-
-                // if (m_Grounded)// || Mathf.Abs(move) > 0.5f)
-                // {
-                // }
+                
                 m_Rigidbody2D.linearVelocity = new Vector2(move*m_MaxSpeed, m_Rigidbody2D.linearVelocity.y);
                 
                 // Move the character
@@ -126,18 +127,26 @@ namespace UnityStandardAssets._2D
             }
             else if (jump && !m_Grounded && currentJumps < m_BonusJumps && !m_IsOnWall)
             {
+                m_Rigidbody2D.linearVelocity = new Vector2(m_Rigidbody2D.linearVelocity.x, 0);
                 m_Rigidbody2D.AddForce(new Vector2(0f, m_JumpForce));
                 ++currentJumps;
             }
             
             
             // If the player should jump...
-            if (jump && m_Grounded && m_Anim.GetBool("Ground"))
+            if ((jump && m_Grounded && m_Anim.GetBool("Ground")) || 
+                (m_Grounded && !crouch && m_CurrentCharge > 0f))
             {
                 // Add a vertical force to the player.
                 m_Grounded = false;
                 m_Anim.SetBool("Ground", false);
-                m_Rigidbody2D.AddForce(new Vector2(0f, m_JumpForce));
+                m_Rigidbody2D.AddForce(new Vector2(0f, Mathf.Lerp(m_JumpForce, m_MaxJumpForce, m_CurrentCharge)));
+                m_CurrentCharge = 0;
+            }
+
+            if (crouch)
+            {
+                m_CurrentCharge = Mathf.Min(m_CurrentCharge + Time.fixedDeltaTime * m_ChargeSpeed, 1.0f);
             }
         }
         
